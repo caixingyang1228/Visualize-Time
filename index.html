@@ -1,0 +1,325 @@
+﻿<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8" />
+    <title></title>
+    <style>
+        #chart {
+            text-align: center;
+            margin-top: 10px;
+        }
+        .tooltip {
+            font-family: simsun;
+            font-size: 14px;
+            width: 120px;
+            height: auto;
+            color: #999;
+            position: absolute;
+            text-align: left;
+            border-style: solid;
+            border-width: 1px;
+            background-color: rgba(0,0,0,0.6);
+            border-radius: 5px;
+        }
+    </style>
+</head>
+<body>
+    <div id="chart"></div>
+    <script src="scripts/d3.v5.min.js"></script>
+    <script>
+        var width = 1500,
+            height = 660;
+        var cellHeight = 30;
+        var cellWidth = 72;
+        var marginLeft = 40;
+        var marginTop = 100;
+        var h_interval = 3;
+        var incidentclassificationlist = [];
+        var monthlist = [
+            "Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"
+        ]
+        var _svg = d3.select('#chart')
+            .append("svg").attr("width", width).attr("height", height)
+            .append('g')
+            .attr("transform", `translate(0,${marginTop})`)
+            ;
+        var colorScale = d3.scaleOrdinal([
+            "rgb(250, 222, 237)",
+            "#d6758d",
+            "#d15c5c",
+            "#fa6a35",
+            "#fac246",
+            "#d4d9e8",
+            "#fff10b"
+        ]);
+        var tooltip = d3.select("body")
+            .append("div")
+            .attr("class", "tooltip")
+            .style("opacity", 0.0);
+        function getTooltipContent(list, title) {
+            var color = "#CCFC62";//"#DE8100";//d3.schemeCategory10[1];
+            var tpl = "<div style='margin-top:5px;'><span style='color:" + color + ";'>"
+            tpl += "{name}: </span>{value}</div>";
+            var html = "<div style='color:#fff;padding-left:20px;padding-right: 20px;padding-bottom:10px;font-size:14px;'>";
+            list.forEach(function (dataItem) {
+                name = dataItem.name, value = dataItem.value;
+                html += tpl.replace("{name}", name).replace("{value}", value);
+            });
+            html += "</div>";
+            return html;
+        }
+        d3.csv("data/j34j-vqvt.csv?v=2").then(function (data) {
+            var monthdata = {}, incidentclassificationobj = {};
+            data.forEach(function (item) {
+                item.incidentcount = item.incidentcount * 1;
+                var arr = item.yearmonth.split("-");
+                var year = arr[0] * 1, month = arr[1] * 1;
+                item.year = year;
+                item.month = month;
+                if (!monthdata[month]) {
+                    monthdata[month] = [];
+                }
+                monthdata[month].push(item);
+                if (!incidentclassificationobj[item.incidentclassification]) {
+                    incidentclassificationobj[item.incidentclassification] = item.incidentclassification;
+                }
+            });
+            incidentclassificationlist = Object.values(incidentclassificationobj);
+
+            var max = d3.quantile(data.map(d => Math.abs(d.incidentcount)).sort(d3.ascending), 0.9975);
+            var color = d3.scaleSequential(d3.interpolatePiYG).domain([0, +max]);
+
+            for (var key in monthdata) {
+                var boroughdata = {};
+                monthdata[key].forEach(function (item) {
+                    if (!boroughdata[item.incidentborough]) {
+                        boroughdata[item.incidentborough] = {
+                            incidentborough: item.incidentborough, list: []
+                        };
+                    }
+                    boroughdata[item.incidentborough].list.push(item);
+                });
+                monthdata[key] = { month: key * 1, list: Object.values(boroughdata) };
+            }
+
+            for (var key in monthdata) {
+                monthdata[key].list.forEach(function (item, i) {
+                    var boroughdata = {};
+                    item.list.forEach(function (d) {
+                        if (!boroughdata[d.yearmonth]) {
+                            boroughdata[d.yearmonth] = d;
+                        }
+                        boroughdata[d.yearmonth].incidentcount += d.incidentcount;
+                    });
+                    monthdata[key].list[i] = { incidentborough: item.incidentborough, list:Object.values(boroughdata) };
+                });
+            }
+            var list = Object.values(monthdata);
+            list.sort(function (a, b) {
+                return a.month - b.month;
+            });
+            console.log(list);
+
+            var _g_incidentclassification = _svg.append("g")
+                .attr("transform", `translate(0,${-marginTop})`);
+
+            var _g_year_legend = _svg.append("g")
+                .attr("transform", `translate(40,${-(marginTop - 90)})`);
+            var clen = 0;
+            _g_year_legend.selectAll("text")
+                .data(d3.range(1, incidentclassificationlist.length * 3))
+                .join("text")
+                .attr("x", function (d, i) {
+                    if (i !== 0 && i % 3 === 0) {
+                        clen += 1;
+                    }
+                    return i * (cellWidth + 1) + clen * 10 * 3 + 14;
+                })
+                .text(function (d) {
+                    if (d % 3 === 1) {
+                        return 2009
+                    }
+                    if (d % 3 === 2) {
+                        return 2010
+                    }
+                    if (d % 3 === 0) {
+                        return 2011
+                    }
+                });
+
+            _g_incidentclassification.selectAll("rect")
+                .data(incidentclassificationlist)
+                .join("rect")
+                .attr("x", (d, i) =>100+ i * (width - 40) / incidentclassificationlist.length)
+                .attr("width", 60)
+                .attr("height", 30)
+                .style("fill", d => colorScale(d))
+                ;
+
+            _g_incidentclassification.selectAll("text")
+                .data(incidentclassificationlist)
+                .join("text")
+                .attr("x", (d, i) => 100 + i * (width - 40) / incidentclassificationlist.length)
+                .attr("y", 48)
+                .text(function (d) {
+                    var arr = d.split(" ");
+                    var name = "";
+                    for (var k in arr) {
+                        name += arr[k][0];
+                    }
+                    return name;
+                })
+                ;
+            var _g_month = _svg.selectAll(".box-month")
+                .data(list)
+                .join("g")
+                .attr("class", "box-month")
+                ;
+            
+            _g_month.append("text")
+                .attr("class", "txt-month")
+                .attr("dy", d => d.month * (cellHeight + h_interval) - 10)
+                .text(function (d) {
+                    return monthlist[d.month - 1];
+                })
+                ;
+            _svg.append("g")
+                .selectAll("text")
+                .data(list[0].list)
+                .join("text")
+                .attr("dx", function (d, i) {
+                    var dx = marginLeft + i * (cellWidth + 10) * 3;
+                    return dx;
+                })
+                .attr("dy", d => 13 * (cellHeight + h_interval)-10)
+                .text(function (d) {
+                    return d.incidentborough;
+                })
+                ;
+            _g_month.append("g")
+                .attr("class", d => "box-year-" + d.month)
+                ;
+            var virtualobj = {};
+            list.forEach(function (item, p) {
+                var _g_year = _g_month.select(".box-year-" + item.month);
+                var ytop = p * (cellHeight + h_interval);
+                item.list.forEach(function (subitem, n) {
+                    var xleft = marginLeft + n * (cellWidth + 10) * 3;
+                    var sublist = subitem.list;
+                    var year2009 = sublist.findIndex(e => e.year === 2009);
+                    if (year2009 < 0) {
+                        sublist.push(getNewDataItem(sublist[0], 2009, item.month));
+                    }
+                    var year2010 = sublist.findIndex(e => e.year === 2010);
+                    if (year2010 < 0) {
+                        sublist.push(getNewDataItem(sublist[0], 2010, item.month));
+                    }
+                    var year2011 = sublist.findIndex(e => e.year === 2011);
+                    if (year2011 < 0) {
+                        sublist.push(getNewDataItem(sublist[0], 2011, item.month));
+                    }
+                    sublist.sort(function (a, b) {
+                        return a.year - b.year;
+                    });
+                    
+                    _g_year.selectAll(".box-cell-" + n)
+                        .data(sublist)
+                        .join("g")
+                        .attr("class", function (d) {
+                            var classname = `cell-${subitem.incidentborough.replace(/[ \.#']+/g, '')}-${d.year}${item.month}`;
+                            if (!virtualobj[classname]) {
+                                virtualobj[classname] = sublist;
+                            }
+                            return `box-cell-${n} ${classname}`;
+                        })
+                        .attr("transform", (d, i) => `translate(${xleft + i * (cellWidth + 1)},${ytop})`)
+                        ;
+                });
+            });
+            for (var key in virtualobj) {
+                var _g_bigcell = _svg.select("." + key);
+                var rect_width = cellWidth / virtualobj[key].length;
+                _g_bigcell.selectAll("rect")
+                    .data(virtualobj[key])
+                    .join("rect")
+                    .attr("x", (d, i) => i * (rect_width))
+                    .attr("y", 0)
+                    .attr("width", rect_width)
+                    .attr("height", cellHeight)
+                    .style("fill", "#ccc")
+                    .style("opacity", 0.5)
+                    .on('mouseover', function (d, i) {
+                        var str = getTooltipContent([
+                            { name: "borough", value: "none"}
+                        ]);
+                        tooltip.html(str)
+                            .style("width", "auto").style("height", "auto")
+                            .style("left", (d3.event.pageX - 60) + "px")
+                            .style("top", (d3.event.pageY + 20) + "px").style("opacity", 1.0)
+                            ;
+                    })
+                    .on('mouseout', function (d) {
+                        tooltip.style("width", 0)
+                            .style("height", 0).style("opacity", 0.0);
+                    })
+                    ;
+            }
+
+            var datalist = {};
+            data.forEach(function (item) {
+                var arr = item.yearmonth.split("-");
+                var year = arr[0] * 1, month = arr[1] * 1;
+                var classname = `cell-${item.incidentborough.replace(/[ \.#']+/g, '')}-${year}${month}`;
+                if (!datalist[classname]) {
+                    datalist[classname] = { month: month, list: [] };
+                }
+                datalist[classname].list.push(item);
+            });
+            console.log(datalist);
+
+            for (var key in datalist) {
+                var _g_bigcell = _svg.select("." + key);
+                var rect_width = cellWidth / datalist[key].list.length;
+                datalist[key].list.sort(function (a, b) {
+                    return a.year - b.year;
+                })
+                _g_bigcell.selectAll("rect")
+                    .data(datalist[key].list)
+                    .join("rect")
+                    .attr("x", (d, i) => i * (rect_width))
+                    .attr("y", 0)
+                    .attr("width", rect_width)
+                    .attr("height", cellHeight)
+                    .style("fill", d => colorScale(d.incidentclassification))
+                    .style("opacity", 1)
+                    .on('mouseover', function (d, i) {
+                        var str = getTooltipContent([
+                            { name: "borough", value: d.incidentborough },
+                            { name: "classification", value: d.incidentclassification },
+                            { name: "yearmonth", value: d.yearmonth },
+                            { name: "count", value: d.incidentcount }
+                        ]);
+                        tooltip.html(str)
+                            .style("width", "auto").style("height", "auto")
+                            .style("left", (d3.event.pageX - 60) + "px")
+                            .style("top", (d3.event.pageY + 20) + "px").style("opacity", 1.0)
+                            ;
+                    })
+                    .on('mouseout', function (d) {
+                        tooltip.style("width", 0)
+                            .style("height", 0).style("opacity", 0.0);
+                    })
+                    ;
+            }
+        });
+
+        function getNewDataItem(initem,year, month) {
+            var newdata = Object.create(initem);
+            newdata.year = year;
+            newdata.yearmonth = year + "-" + month;
+            newdata.incidentcount = 0;
+            return newdata;
+        }
+    </script>
+</body>
+</html>
