@@ -1,9 +1,9 @@
-Countdown Page - Visualizing FDNY Response Time
+## Countdown Page - Visualizing FDNY Response Time
 
 The data I found was the response times for the FDNY in different areas
 of New York.
 
-As a result of briefly examining the data, I found that：
+### As a result of briefly examining the data, I found that：
 
 ​1. Response Time is different in different areas of New York, which is
 an interesting visualization point.
